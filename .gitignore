@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+
+# Environment
+.env
+
+# Runtime data (git-ignored)
+flask_session/
+data/
+
+# Certs (git-ignored — place manually)
+nginx/certs/
+certs/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Coverage
+.coverage
+htmlcov/

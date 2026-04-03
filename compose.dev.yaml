@@ -1,0 +1,9 @@
+services:
+  sspr:
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app

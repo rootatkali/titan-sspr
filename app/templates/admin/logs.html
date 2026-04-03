@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:40px auto;">
+  <h2 class="mb-4">Audit Log <span class="badge bg-secondary fs-6">{{ total }} entries</span></h2>
+  <div class="table-responsive">
+    <table class="table table-striped table-sm align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Timestamp (UTC)</th>
+          <th>Action</th>
+          <th>Outcome</th>
+          <th>Username</th>
+          <th>IP Address</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td class="text-nowrap small">{{ entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+          <td><span class="badge bg-info text-dark">{{ entry.action }}</span></td>
+          <td>
+            {% if entry.outcome == "SUCCESS" %}
+              <span class="badge bg-success">SUCCESS</span>
+            {% else %}
+              <span class="badge bg-danger">FAILURE</span>
+            {% endif %}
+          </td>
+          <td class="text-nowrap">{{ entry.username or "—" }}</td>
+          <td class="text-nowrap small">{{ entry.ip_address or "—" }}</td>
+          <td class="small text-muted">{{ entry.detail or "" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No audit entries yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <nav>
+    <ul class="pagination">
+      {% for p in range(1, total_pages + 1) %}
+        <li class="page-item {{ 'active' if p == page else '' }}">
+          <a class="page-link" href="?page={{ p }}">{{ p }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

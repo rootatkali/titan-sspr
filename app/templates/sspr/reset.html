@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Set New Password{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header text-center py-3">
+    <h4 class="mb-0">Set New Password</h4>
+  </div>
+  <div class="card-body p-4">
+    <p class="text-muted mb-1">Password requirements:</p>
+    <ul class="text-muted small mb-4">
+      <li>At least 12 characters</li>
+      <li>Uppercase, lowercase, digit, and special character</li>
+    </ul>
+    {% if complexity_errors %}
+      <div class="alert alert-danger">
+        <strong>Password does not meet requirements:</strong>
+        <ul class="mb-0 mt-1">
+          {% for err in complexity_errors %}
+            <li>{{ err }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('sspr.reset') }}" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.new_password.label(class="form-label fw-semibold") }}
+        {{ form.new_password(class="form-control form-control-lg" + (" is-invalid" if form.new_password.errors else "")) }}
+        {% for err in form.new_password.errors %}
+          <div class="invalid-feedback">{{ err }}</div>
+        {% endfor %}
+      </div>
+      <div class="mb-4">
+        {{ form.confirm_password.label(class="form-label fw-semibold") }}
+        {{ form.confirm_password(class="form-control form-control-lg" + (" is-invalid" if form.confirm_password.errors else "")) }}
+        {% for err in form.confirm_password.errors %}
+          <div class="invalid-feedback">{{ err }}</div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary w-100 btn-lg">Reset Password</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

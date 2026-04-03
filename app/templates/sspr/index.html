@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Reset Password{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header text-center py-3">
+    <h4 class="mb-0">IT Self-Service Password Reset</h4>
+  </div>
+  <div class="card-body p-4">
+    {% if success %}
+      <div class="text-center">
+        <div class="mb-3 text-success" style="font-size:3rem;">&#10003;</div>
+        <p class="lead">Your password has been reset successfully.</p>
+        <p class="text-muted small">You can now log in to internal systems with your new password.</p>
+        <a href="{{ url_for('sspr.index') }}" class="btn btn-outline-primary mt-2">Reset another account</a>
+      </div>
+    {% else %}
+      <p class="text-muted mb-4">
+        Enter your network username below. A one-time code will be sent to your Microsoft Teams chat.
+      </p>
+      <form method="post" action="{{ url_for('sspr.send_otp_post') }}" novalidate>
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          {{ form.username.label(class="form-label fw-semibold") }}
+          {{ form.username(class="form-control form-control-lg" + (" is-invalid" if form.username.errors else "")) }}
+          {% for err in form.username.errors %}
+            <div class="invalid-feedback">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary w-100 btn-lg">Send Code via Teams</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
