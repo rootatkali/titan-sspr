@@ -12,7 +12,7 @@ FAKE_USER = {"phone": "+15550001234", "displayName": "Test User"}
 
 def _patch_sms_success(monkeypatch):
     monkeypatch.setattr("app.blueprints.sspr.routes.sms_service.lookup_user", lambda u: FAKE_USER)
-    monkeypatch.setattr("app.blueprints.sspr.routes.sms_service.start_verification", lambda phone: None)
+    monkeypatch.setattr("app.blueprints.sspr.routes.sms_service.start_verification", lambda phone: phone)
 
 
 def _patch_verify_success(monkeypatch):

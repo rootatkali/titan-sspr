@@ -71,11 +71,13 @@ def test_lookup_user_returns_none_when_no_phone_attrs(app):
 def test_start_verification_calls_twilio(app):
     mock_resp = MagicMock()
     mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = {"to": "+15550001234"}
 
     with app.app_context(), patch("app.services.sms_service.requests.post", return_value=mock_resp) as mock_post:
         from app.services import sms_service
-        sms_service.start_verification("+15550001234")
+        result = sms_service.start_verification("+15550001234")
 
+    assert result == "+15550001234"
     mock_post.assert_called_once()
     call_kwargs = mock_post.call_args
     assert "Verifications" in call_kwargs[0][0]

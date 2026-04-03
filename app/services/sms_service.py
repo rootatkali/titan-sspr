@@ -71,8 +71,11 @@ def _attr_value(entry, attr: str) -> str | None:
         return None
 
 
-def start_verification(phone: str) -> None:
-    """Initiate a Twilio Verify SMS to the given phone number."""
+def start_verification(phone: str) -> str:
+    """
+    Initiate a Twilio Verify SMS to the given phone number.
+    Returns Twilio's normalized E.164 number — always use this for check_verification.
+    """
     cfg = _get_config()
     url = f"https://verify.twilio.com/v2/Services/{cfg['TWILIO_VERIFY_SERVICE_SID']}/Verifications"
     resp = requests.post(
@@ -82,7 +85,9 @@ def start_verification(phone: str) -> None:
         timeout=15,
     )
     resp.raise_for_status()
-    logger.info("Twilio Verify started for phone ending ...%s", phone[-4:])
+    normalized = resp.json()["to"]
+    logger.info("Twilio Verify started for phone ending ...%s", normalized[-4:])
+    return normalized
 
 
 def check_verification(phone: str, code: str) -> str:

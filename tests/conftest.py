@@ -58,7 +58,7 @@ def mock_sms(monkeypatch):
     """Patch sms_service so no real Twilio or LDAP calls happen."""
     fake_user = {"phone": "+15550001234", "displayName": "Test User"}
     monkeypatch.setattr("app.services.sms_service.lookup_user", lambda u: fake_user)
-    monkeypatch.setattr("app.services.sms_service.start_verification", lambda phone: None)
+    monkeypatch.setattr("app.services.sms_service.start_verification", lambda phone: phone)
     return fake_user
 
 

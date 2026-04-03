@@ -56,9 +56,9 @@ def send_otp_post():
         flash("Could not send OTP. Please verify your username.", "warning")
         return redirect(url_for("sspr.index"))
 
-    # Start Twilio Verify SMS
+    # Start Twilio Verify SMS — store the normalized number Twilio returns
     try:
-        sms_service.start_verification(user["phone"])
+        normalized_phone = sms_service.start_verification(user["phone"])
     except Exception as exc:
         logger.error("Twilio start_verification failed: %s", exc)
         audit_service.log(Action.SEND_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail=str(exc))
@@ -67,7 +67,7 @@ def send_otp_post():
 
     # Lock username and phone in session
     session["username"] = username
-    session["phone"] = user["phone"]
+    session["phone"] = normalized_phone
     session.modified = True
 
     audit_service.log(Action.SEND_OTP, Outcome.SUCCESS, username=username, ip_address=ip)
