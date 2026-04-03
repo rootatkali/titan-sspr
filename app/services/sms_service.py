@@ -97,7 +97,7 @@ def check_verification(phone: str, code: str) -> str:
     Raises on non-2xx responses (404 = expired/used, 429 = rate limited).
     """
     cfg = _get_config()
-    url = f"https://verify.twilio.com/v2/Services/{cfg['TWILIO_VERIFY_SERVICE_SID']}/VerificationChecks"
+    url = f"https://verify.twilio.com/v2/Services/{cfg['TWILIO_VERIFY_SERVICE_SID']}/VerificationCheck"
     resp = requests.post(
         url,
         data={"To": phone, "Code": code},
