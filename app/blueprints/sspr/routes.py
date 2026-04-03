@@ -14,9 +14,8 @@ from app.blueprints.sspr.forms import (
 )
 from app.extensions import limiter
 from app.models.audit_log import Action, Outcome
-from app.services import audit_service, graph_service, otp_service
+from app.services import audit_service, sms_service
 from app.services.ad_service import ADError, reset_password
-from app.services.otp_service import OTPResult
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +41,11 @@ def send_otp_post():
     username = form.username.data.strip().lower()
     ip = request.remote_addr
 
-    # Look up user in M365 (Graph)
+    # Look up user phone via LDAP
     try:
-        user = graph_service.lookup_user(username)
+        user = sms_service.lookup_user(username)
     except Exception as exc:
-        logger.error("Graph lookup failed: %s", exc)
+        logger.error("LDAP lookup failed: %s", exc)
         audit_service.log(Action.SEND_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail=str(exc))
         flash("An error occurred. Please try again later.", "danger")
         return redirect(url_for("sspr.index"))
@@ -57,32 +56,29 @@ def send_otp_post():
         flash("Could not send OTP. Please verify your username.", "warning")
         return redirect(url_for("sspr.index"))
 
-    # Generate and send OTP
-    cfg = _get_cfg()
-    otp = otp_service.generate_otp()
-    otp_service.store_otp(session, otp, cfg["OTP_EXPIRY_SECONDS"], cfg["OTP_MAX_ATTEMPTS"])
-
+    # Start Twilio Verify SMS
     try:
-        graph_service.send_otp_via_teams(user["id"], otp)
+        sms_service.start_verification(user["phone"])
     except Exception as exc:
-        logger.error("Teams message failed: %s", exc)
-        otp_service.clear_otp(session)
+        logger.error("Twilio start_verification failed: %s", exc)
         audit_service.log(Action.SEND_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail=str(exc))
-        flash("Failed to send OTP via Teams. Please contact IT support.", "danger")
+        flash("Failed to send verification code. Please contact IT support.", "danger")
         return redirect(url_for("sspr.index"))
 
-    # Lock username in session — never updated again
+    # Lock username and phone in session
     session["username"] = username
+    session["phone"] = user["phone"]
     session.modified = True
 
     audit_service.log(Action.SEND_OTP, Outcome.SUCCESS, username=username, ip_address=ip)
-    flash("A 6-digit code has been sent to your Teams chat.", "info")
+    flash("A 6-digit code has been sent to your mobile phone.", "info")
     return redirect(url_for("sspr.verify"))
 
 
 @sspr_bp.route("/verify", methods=["GET", "POST"])
 def verify():
-    if not session.get("username"):
+    phone = session.get("phone")
+    if not session.get("username") or not phone:
         flash("Session expired. Please start over.", "warning")
         return redirect(url_for("sspr.index"))
 
@@ -90,32 +86,27 @@ def verify():
     if not form.validate_on_submit():
         return render_template("sspr/verify.html", form=form)
 
-    candidate = form.otp.data.strip()
-    cfg = _get_cfg()
-    result = otp_service.validate_otp(session, candidate)
     ip = request.remote_addr
     username = session.get("username")
 
-    if result == OTPResult.VALID:
+    try:
+        status = sms_service.check_verification(phone, form.otp.data.strip())
+    except Exception as exc:
+        # 404 = expired/used, 429 = too many attempts, other errors
+        logger.error("Twilio verify check failed: %s", exc)
+        audit_service.log(Action.VERIFY_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail=str(exc))
+        session.clear()
+        flash("Verification failed or code expired. Please start over.", "danger")
+        return redirect(url_for("sspr.index"))
+
+    if status == "approved":
         session["otp_verified"] = True
         session.modified = True
         audit_service.log(Action.VERIFY_OTP, Outcome.SUCCESS, username=username, ip_address=ip)
         return redirect(url_for("sspr.reset"))
 
-    if result == OTPResult.EXPIRED:
-        audit_service.log(Action.VERIFY_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail="expired")
-        session.clear()
-        flash("Your code has expired. Please start over.", "warning")
-        return redirect(url_for("sspr.index"))
-
-    if result == OTPResult.MAX_ATTEMPTS:
-        audit_service.log(Action.VERIFY_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail="max_attempts")
-        session.clear()
-        flash("Too many incorrect attempts. Please start over.", "danger")
-        return redirect(url_for("sspr.index"))
-
-    # INVALID
-    audit_service.log(Action.VERIFY_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail="invalid_otp")
+    # "pending" = wrong code — Twilio still accepts retries until its own limit
+    audit_service.log(Action.VERIFY_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail="wrong_code")
     flash("Incorrect code. Please try again.", "danger")
     return render_template("sspr/verify.html", form=form)
 
@@ -154,10 +145,6 @@ def reset():
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _get_cfg() -> dict:
-    from flask import current_app
-    return current_app.config
-
-
 def _get_rate_limit() -> str:
-    return _get_cfg().get("RATELIMIT_OTP_SEND", "5 per hour")
+    from flask import current_app
+    return current_app.config.get("RATELIMIT_OTP_SEND", "5 per hour")

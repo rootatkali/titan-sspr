@@ -7,7 +7,6 @@ dependencies = [
     "flask-session>=0.8",
     "flask-limiter>=3.5",
     "flask-wtf>=1.2",
-    "msal>=1.28",
     "requests>=2.32",
     "ldap3>=2.9",
     "sqlalchemy>=2.0",

@@ -15,7 +15,7 @@
       </div>
     {% else %}
       <p class="text-muted mb-4">
-        Enter your network username below. A one-time code will be sent to your Microsoft Teams chat.
+        Enter your network username below. A one-time code will be sent to your mobile phone.
       </p>
       <form method="post" action="{{ url_for('sspr.send_otp_post') }}" novalidate>
         {{ form.hidden_tag() }}
@@ -26,7 +26,7 @@
             <div class="invalid-feedback">{{ err }}</div>
           {% endfor %}
         </div>
-        <button type="submit" class="btn btn-primary w-100 btn-lg">Send Code via Teams</button>
+        <button type="submit" class="btn btn-primary w-100 btn-lg">Send Code via SMS</button>
       </form>
     {% endif %}
   </div>

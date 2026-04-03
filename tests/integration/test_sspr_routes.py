@@ -1,18 +1,25 @@
 """Integration tests for the SSPR blueprint — full flow + failure paths."""
 from __future__ import annotations
 
-import base64
+import requests as req_lib
 from unittest.mock import patch
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-FAKE_USER = {"id": "fake-user-id-111", "displayName": "Test User"}
+FAKE_USER = {"phone": "+15550001234", "displayName": "Test User"}
 
 
-def _patch_graph_success(monkeypatch):
-    monkeypatch.setattr("app.services.graph_service.lookup_user", lambda u: FAKE_USER)
-    monkeypatch.setattr("app.services.graph_service.send_otp_via_teams", lambda uid, otp: None)
+def _patch_sms_success(monkeypatch):
+    monkeypatch.setattr("app.blueprints.sspr.routes.sms_service.lookup_user", lambda u: FAKE_USER)
+    monkeypatch.setattr("app.blueprints.sspr.routes.sms_service.start_verification", lambda phone: None)
+
+
+def _patch_verify_success(monkeypatch):
+    monkeypatch.setattr(
+        "app.blueprints.sspr.routes.sms_service.check_verification",
+        lambda phone, code: "approved",
+    )
 
 
 def _patch_ad_success(monkeypatch):
@@ -23,16 +30,11 @@ def _send_otp(client, username="testuser"):
     return client.post("/send-otp", data={"username": username})
 
 
-def _get_otp_from_session(client, app):
-    """Read the OTP that was stored in the Flask test session."""
-    with client.session_transaction() as sess:
-        return sess.get("otp", {}).get("value")
-
-
 # ── Happy path ────────────────────────────────────────────────────────────────
 
 def test_happy_path_full_flow(client, app, monkeypatch):
-    _patch_graph_success(monkeypatch)
+    _patch_sms_success(monkeypatch)
+    _patch_verify_success(monkeypatch)
     _patch_ad_success(monkeypatch)
 
     # Step 1: GET /
@@ -44,24 +46,21 @@ def test_happy_path_full_flow(client, app, monkeypatch):
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/verify")
 
-    # Grab OTP from session
     with client.session_transaction() as sess:
-        otp = sess["otp"]["value"]
         assert sess["username"] == "testuser"
+        assert sess["phone"] == "+15550001234"
 
     # Step 3: GET /verify
     resp = client.get("/verify")
     assert resp.status_code == 200
 
-    # Step 4: POST /verify with correct OTP
-    resp = client.post("/verify", data={"otp": otp})
+    # Step 4: POST /verify with any 6-digit code (Twilio mocked to approve)
+    resp = client.post("/verify", data={"otp": "123456"})
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/reset")
 
-    # Verify session state
     with client.session_transaction() as sess:
         assert sess.get("otp_verified") is True
-        assert "otp" not in sess
 
     # Step 5: GET /reset
     resp = client.get("/reset")
@@ -89,17 +88,21 @@ def test_verify_post_without_session_redirects(client):
 # ── Guard: reset rejects unverified session ───────────────────────────────────
 
 def test_reset_without_otp_verified_redirects(client, monkeypatch):
-    _patch_graph_success(monkeypatch)
+    _patch_sms_success(monkeypatch)
     _send_otp(client)
     # Go directly to /reset without verifying OTP
     resp = client.get("/reset")
     assert resp.status_code == 302
 
 
-# ── Wrong OTP: error shown, stay on verify ────────────────────────────────────
+# ── Wrong OTP: "pending" from Twilio — error shown, stay on verify ────────────
 
 def test_wrong_otp_stays_on_verify(client, monkeypatch):
-    _patch_graph_success(monkeypatch)
+    _patch_sms_success(monkeypatch)
+    monkeypatch.setattr(
+        "app.blueprints.sspr.routes.sms_service.check_verification",
+        lambda phone, code: "pending",
+    )
     _send_otp(client)
 
     resp = client.post("/verify", data={"otp": "000000"})
@@ -107,55 +110,51 @@ def test_wrong_otp_stays_on_verify(client, monkeypatch):
     assert b"Incorrect" in resp.data
 
     with client.session_transaction() as sess:
-        assert sess["otp"]["attempts"] == 1
         assert "otp_verified" not in sess
 
 
-# ── Expired OTP: redirected to start ─────────────────────────────────────────
+# ── Expired / used code: Twilio raises 404 → redirect to start ───────────────
 
-def test_expired_otp_redirects_to_start(client, app, monkeypatch):
-    _patch_graph_success(monkeypatch)
+def test_expired_otp_redirects_to_start(client, monkeypatch):
+    _patch_sms_success(monkeypatch)
+    monkeypatch.setattr(
+        "app.blueprints.sspr.routes.sms_service.check_verification",
+        lambda phone, code: (_ for _ in ()).throw(req_lib.HTTPError("404 Not Found")),
+    )
     _send_otp(client)
-
-    # Force expiry — must reassign the whole dict to trigger session save
-    with client.session_transaction() as sess:
-        otp_data = dict(sess["otp"])
-        otp_data["expires_at"] = 0
-        sess["otp"] = otp_data
 
     resp = client.post("/verify", data={"otp": "123456"})
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/")
 
 
-# ── Max attempts: session cleared, redirected to start ───────────────────────
+# ── Rate limited: Twilio raises 429 → session cleared, redirect to start ──────
 
 def test_max_attempts_clears_session(client, monkeypatch):
-    _patch_graph_success(monkeypatch)
+    _patch_sms_success(monkeypatch)
+    monkeypatch.setattr(
+        "app.blueprints.sspr.routes.sms_service.check_verification",
+        lambda phone, code: (_ for _ in ()).throw(req_lib.HTTPError("429 Too Many Requests")),
+    )
     _send_otp(client)
 
-    for _ in range(3):
-        resp = client.post("/verify", data={"otp": "000000"})
-
+    resp = client.post("/verify", data={"otp": "000000"})
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/")
 
     with client.session_transaction() as sess:
         assert "username" not in sess
-        assert "otp" not in sess
+        assert "phone" not in sess
 
 
 # ── Password complexity failures ─────────────────────────────────────────────
 
 def test_weak_password_shows_errors(client, monkeypatch):
-    _patch_graph_success(monkeypatch)
+    _patch_sms_success(monkeypatch)
+    _patch_verify_success(monkeypatch)
     _patch_ad_success(monkeypatch)
     _send_otp(client)
-
-    with client.session_transaction() as sess:
-        otp = sess["otp"]["value"]
-
-    client.post("/verify", data={"otp": otp})
+    client.post("/verify", data={"otp": "123456"})
 
     resp = client.post("/reset", data={"new_password": "weak", "confirm_password": "weak"})
     assert resp.status_code == 200
@@ -165,10 +164,9 @@ def test_weak_password_shows_errors(client, monkeypatch):
 # ── User not found (no enumeration) ─────────────────────────────────────────
 
 def test_unknown_user_generic_message(client, monkeypatch):
-    monkeypatch.setattr("app.services.graph_service.lookup_user", lambda u: None)
+    monkeypatch.setattr("app.blueprints.sspr.routes.sms_service.lookup_user", lambda u: None)
 
     resp = _send_otp(client, username="ghost")
-    # Should redirect back to index, not expose "user not found"
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/")
 
@@ -185,7 +183,8 @@ def test_rate_limit_returns_429(client, app, monkeypatch):
 # ── AD failure surfaced ───────────────────────────────────────────────────────
 
 def test_ad_failure_shows_error(client, monkeypatch):
-    _patch_graph_success(monkeypatch)
+    _patch_sms_success(monkeypatch)
+    _patch_verify_success(monkeypatch)
 
     from app.services.ad_service import ADError
     def _raise(u, p):
@@ -193,9 +192,7 @@ def test_ad_failure_shows_error(client, monkeypatch):
     monkeypatch.setattr("app.blueprints.sspr.routes.reset_password", _raise)
 
     _send_otp(client)
-    with client.session_transaction() as sess:
-        otp = sess["otp"]["value"]
-    client.post("/verify", data={"otp": otp})
+    client.post("/verify", data={"otp": "123456"})
 
     resp = client.post("/reset", data={"new_password": "ValidPass123!", "confirm_password": "ValidPass123!"})
     assert resp.status_code == 200

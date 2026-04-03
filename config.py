@@ -13,11 +13,9 @@ load_dotenv()
 
 _REQUIRED = [
     "SECRET_KEY",
-    "AZURE_TENANT_ID",
-    "AZURE_CLIENT_ID",
-    "AZURE_CLIENT_SECRET",
-    "AZURE_BOT_USER_ID",
-    "M365_DOMAIN",
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_VERIFY_SERVICE_SID",
     "LDAP_SERVER",
     "LDAP_CA_CERT_PATH",
     "LDAP_SERVICE_ACCOUNT_DN",
@@ -49,20 +47,14 @@ class Config:
     SESSION_FILE_DIR: str
     SESSION_PERMANENT: bool
 
-    # OTP
-    OTP_EXPIRY_SECONDS: int
-    OTP_MAX_ATTEMPTS: int
-
     # Rate limiting
     RATELIMIT_OTP_SEND: str
     RATELIMIT_STORAGE_URI: str
 
-    # Azure / Graph
-    AZURE_TENANT_ID: str
-    AZURE_CLIENT_ID: str
-    AZURE_CLIENT_SECRET: str
-    AZURE_BOT_USER_ID: str
-    M365_DOMAIN: str
+    # Twilio Verify
+    TWILIO_ACCOUNT_SID: str
+    TWILIO_AUTH_TOKEN: str
+    TWILIO_VERIFY_SERVICE_SID: str
 
     # LDAP
     LDAP_SERVER: str
@@ -96,15 +88,11 @@ class Config:
             SESSION_TYPE=os.getenv("SESSION_TYPE", "filesystem"),
             SESSION_FILE_DIR=os.getenv("SESSION_FILE_DIR", "flask_session"),
             SESSION_PERMANENT=os.getenv("SESSION_PERMANENT", "false").lower() == "true",
-            OTP_EXPIRY_SECONDS=int(os.getenv("OTP_EXPIRY_SECONDS", "600")),
-            OTP_MAX_ATTEMPTS=int(os.getenv("OTP_MAX_ATTEMPTS", "3")),
             RATELIMIT_OTP_SEND=os.getenv("RATELIMIT_OTP_SEND", "5 per hour"),
             RATELIMIT_STORAGE_URI=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
-            AZURE_TENANT_ID=os.environ["AZURE_TENANT_ID"],
-            AZURE_CLIENT_ID=os.environ["AZURE_CLIENT_ID"],
-            AZURE_CLIENT_SECRET=os.environ["AZURE_CLIENT_SECRET"],
-            AZURE_BOT_USER_ID=os.environ["AZURE_BOT_USER_ID"],
-            M365_DOMAIN=os.environ["M365_DOMAIN"],
+            TWILIO_ACCOUNT_SID=os.environ["TWILIO_ACCOUNT_SID"],
+            TWILIO_AUTH_TOKEN=os.environ["TWILIO_AUTH_TOKEN"],
+            TWILIO_VERIFY_SERVICE_SID=os.environ["TWILIO_VERIFY_SERVICE_SID"],
             LDAP_SERVER=os.environ["LDAP_SERVER"],
             LDAP_PORT=int(os.getenv("LDAP_PORT", "636")),
             LDAP_CA_CERT_PATH=os.environ["LDAP_CA_CERT_PATH"],

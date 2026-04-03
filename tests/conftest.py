@@ -18,16 +18,12 @@ TEST_CONFIG = {
     "SECRET_KEY": "test-secret-key-not-for-production",
     "SESSION_TYPE": "null",
     "SESSION_PERMANENT": False,
-    "OTP_EXPIRY_SECONDS": 600,
-    "OTP_MAX_ATTEMPTS": 3,
     "RATELIMIT_ENABLED": False,
     "RATELIMIT_OTP_SEND": "1000 per hour",
     "RATELIMIT_STORAGE_URI": "memory://",
-    "AZURE_TENANT_ID": "test-tenant",
-    "AZURE_CLIENT_ID": "test-client",
-    "AZURE_CLIENT_SECRET": "test-secret",
-    "AZURE_BOT_USER_ID": "bot-user-id",
-    "M365_DOMAIN": "test.example.com",
+    "TWILIO_ACCOUNT_SID": "ACtest000000000000000000000000000",
+    "TWILIO_AUTH_TOKEN": "test_auth_token",
+    "TWILIO_VERIFY_SERVICE_SID": "VAtest000000000000000000000000000",
     "LDAP_SERVER": "ldap.test.local",
     "LDAP_PORT": 636,
     "LDAP_CA_CERT_PATH": "/fake/ca.pem",
@@ -58,12 +54,11 @@ def client(app):
 
 
 @pytest.fixture()
-def mock_graph(monkeypatch):
-    """Patch graph_service so no real Graph calls happen."""
-    fake_user = {"id": "fake-user-id-123", "displayName": "Test User", "userPrincipalName": "testuser@test.example.com"}
-
-    monkeypatch.setattr("app.services.graph_service.lookup_user", lambda username: fake_user)
-    monkeypatch.setattr("app.services.graph_service.send_otp_via_teams", lambda user_id, otp: None)
+def mock_sms(monkeypatch):
+    """Patch sms_service so no real Twilio or LDAP calls happen."""
+    fake_user = {"phone": "+15550001234", "displayName": "Test User"}
+    monkeypatch.setattr("app.services.sms_service.lookup_user", lambda u: fake_user)
+    monkeypatch.setattr("app.services.sms_service.start_verification", lambda phone: None)
     return fake_user
 
 
