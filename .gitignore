@@ -24,3 +24,5 @@ certs/
 # Coverage
 .coverage
 htmlcov/
+
+.claude/settings.local.json

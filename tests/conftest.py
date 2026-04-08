@@ -24,6 +24,8 @@ TEST_CONFIG = {
     "TWILIO_ACCOUNT_SID": "ACtest000000000000000000000000000",
     "TWILIO_AUTH_TOKEN": "test_auth_token",
     "TWILIO_VERIFY_SERVICE_SID": "VAtest000000000000000000000000000",
+    "HAPI_BASE_URL": "https://hapi.test.local",
+    "HAPI_TOKEN": "test-hapi-token",
     "LDAP_SERVER": "ldap.test.local",
     "LDAP_PORT": 636,
     "LDAP_CA_CERT_PATH": "/fake/ca.pem",
@@ -55,8 +57,8 @@ def client(app):
 
 @pytest.fixture()
 def mock_sms(monkeypatch):
-    """Patch sms_service so no real Twilio or LDAP calls happen."""
-    fake_user = {"phone": "+15550001234", "displayName": "Test User"}
+    """Patch sms_service so no real Twilio or HAPI calls happen."""
+    fake_user = {"phone": "+15550001234"}
     monkeypatch.setattr("app.services.sms_service.lookup_user", lambda u: fake_user)
     monkeypatch.setattr("app.services.sms_service.start_verification", lambda phone: phone)
     return fake_user

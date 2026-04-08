@@ -16,6 +16,8 @@ _REQUIRED = [
     "TWILIO_ACCOUNT_SID",
     "TWILIO_AUTH_TOKEN",
     "TWILIO_VERIFY_SERVICE_SID",
+    "HAPI_BASE_URL",
+    "HAPI_TOKEN",
     "LDAP_SERVER",
     "LDAP_CA_CERT_PATH",
     "LDAP_SERVICE_ACCOUNT_DN",
@@ -56,6 +58,10 @@ class Config:
     TWILIO_AUTH_TOKEN: str
     TWILIO_VERIFY_SERVICE_SID: str
 
+    # HAPI
+    HAPI_BASE_URL: str
+    HAPI_TOKEN: str
+
     # LDAP
     LDAP_SERVER: str
     LDAP_PORT: int
@@ -93,6 +99,8 @@ class Config:
             TWILIO_ACCOUNT_SID=os.environ["TWILIO_ACCOUNT_SID"],
             TWILIO_AUTH_TOKEN=os.environ["TWILIO_AUTH_TOKEN"],
             TWILIO_VERIFY_SERVICE_SID=os.environ["TWILIO_VERIFY_SERVICE_SID"],
+            HAPI_BASE_URL=os.environ["HAPI_BASE_URL"],
+            HAPI_TOKEN=os.environ["HAPI_TOKEN"],
             LDAP_SERVER=os.environ["LDAP_SERVER"],
             LDAP_PORT=int(os.getenv("LDAP_PORT", "636")),
             LDAP_CA_CERT_PATH=os.environ["LDAP_CA_CERT_PATH"],

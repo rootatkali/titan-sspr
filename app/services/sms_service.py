@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 import logging
-import ssl
 
 import requests
-from ldap3 import Connection, Server, Tls
 from requests.auth import HTTPBasicAuth
 
 logger = logging.getLogger(__name__)
@@ -18,57 +16,23 @@ def _get_config() -> dict:
 
 def lookup_user(username: str) -> dict | None:
     """
-    Look up a user by sAMAccountName via LDAP and return their phone number.
-    Phone priority: mobile → telephoneNumber.
-    Returns {"phone": str, "displayName": str} or None if not found / no phone.
+    Look up a student by course_username via HAPI and return their phone number.
+    Returns {"phone": str} or None if not found / no phone.
     """
-
     cfg = _get_config()
-    tls = Tls(
-        ca_certs_file=cfg["LDAP_CA_CERT_PATH"],
-        validate=ssl.CERT_REQUIRED,
-        version=ssl.PROTOCOL_TLS_CLIENT,
+    resp = requests.get(
+        f"{cfg['HAPI_BASE_URL']}/api/students",
+        params={"q": username},
+        headers={"Authorization": f"Bearer {cfg['HAPI_TOKEN']}"},
+        timeout=10,
+        verify=False,
     )
-    server = Server(cfg["LDAP_SERVER"], port=cfg["LDAP_PORT"], use_ssl=True, tls=tls)
-    conn = Connection(
-        server,
-        user=cfg["LDAP_SERVICE_ACCOUNT_DN"],
-        password=cfg["LDAP_SERVICE_ACCOUNT_PASS"],
-        auto_bind=True,
-    )
-    try:
-        search_filter = cfg["LDAP_USER_SEARCH_FILTER"].replace("{username}", username)
-        conn.search(
-            cfg["LDAP_SEARCH_BASE"],
-            search_filter,
-            attributes=["mobile", "telephoneNumber", "displayName"],
-        )
-        if not conn.entries:
-            return None
-
-        entry = conn.entries[0]
-        mobile = _attr_value(entry, "mobile")
-        telephone = _attr_value(entry, "telephoneNumber")
-        phone = mobile or telephone
-        if not phone:
-            return None
-
-        display_name = _attr_value(entry, "displayName") or username
-        return {"phone": phone, "displayName": display_name}
-    finally:
-        try:
-            conn.unbind()
-        except Exception:
-            pass
-
-
-def _attr_value(entry, attr: str) -> str | None:
-    """Return the string value of an ldap3 entry attribute, or None if absent/empty."""
-    try:
-        val = getattr(entry, attr).value
-        return str(val).strip() if val else None
-    except Exception:
-        return None
+    resp.raise_for_status()
+    for student in resp.json():
+        if student.get("course_username") == username:
+            phone = student.get("phone_number") or None
+            return {"phone": phone} if phone else None
+    return None
 
 
 def start_verification(phone: str) -> str:

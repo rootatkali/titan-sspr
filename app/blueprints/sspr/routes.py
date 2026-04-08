@@ -41,11 +41,10 @@ def send_otp_post():
     username = form.username.data.strip().lower()
     ip = request.remote_addr
 
-    # Look up user phone via LDAP
     try:
         user = sms_service.lookup_user(username)
     except Exception as exc:
-        logger.error("LDAP lookup failed: %s", exc)
+        logger.error("User lookup failed: %s", exc)
         audit_service.log(Action.SEND_OTP, Outcome.FAILURE, username=username, ip_address=ip, detail=str(exc))
         flash("An error occurred. Please try again later.", "danger")
         return redirect(url_for("sspr.index"))

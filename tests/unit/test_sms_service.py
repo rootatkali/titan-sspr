@@ -1,4 +1,4 @@
-"""Unit tests for sms_service — all mocked, no real Twilio or LDAP calls."""
+"""Unit tests for sms_service — all mocked, no real Twilio or HAPI calls."""
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -9,61 +9,57 @@ import requests as req_lib
 
 # ── lookup_user ───────────────────────────────────────────────────────────────
 
-def _make_entry(mobile=None, telephoneNumber=None, displayName="Alice"):
-    entry = MagicMock()
-    entry.mobile.value = mobile
-    entry.telephoneNumber.value = telephoneNumber
-    entry.displayName.value = displayName
-    return entry
+def _make_get_mock(students: list) -> MagicMock:
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = students
+    mock = MagicMock(return_value=resp)
+    return mock
 
 
-def _make_conn(entries):
-    conn = MagicMock()
-    conn.entries = entries
-    return conn
-
-
-def test_lookup_user_returns_dict_with_mobile(app):
-    entry = _make_entry(mobile="+15550001234", telephoneNumber="+15559999999")
+def test_lookup_user_returns_phone(app):
+    students = [{"course_username": "alice", "phone_number": "+15550001234", "full_name": "Alice"}]
     with app.app_context(), \
-         patch("app.services.sms_service.Tls"), \
-         patch("app.services.sms_service.Server"), \
-         patch("app.services.sms_service.Connection", return_value=_make_conn([entry])):
+         patch("app.services.sms_service.requests.get", _make_get_mock(students)):
         from app.services import sms_service
         result = sms_service.lookup_user("alice")
-    assert result == {"phone": "+15550001234", "displayName": "Alice"}
+    assert result == {"phone": "+15550001234"}
 
 
-def test_lookup_user_falls_back_to_telephoneNumber(app):
-    entry = _make_entry(mobile=None, telephoneNumber="+15559999999")
+def test_lookup_user_returns_none_when_no_students(app):
     with app.app_context(), \
-         patch("app.services.sms_service.Tls"), \
-         patch("app.services.sms_service.Server"), \
-         patch("app.services.sms_service.Connection", return_value=_make_conn([entry])):
-        from app.services import sms_service
-        result = sms_service.lookup_user("alice")
-    assert result["phone"] == "+15559999999"
-
-
-def test_lookup_user_returns_none_when_user_not_found(app):
-    with app.app_context(), \
-         patch("app.services.sms_service.Tls"), \
-         patch("app.services.sms_service.Server"), \
-         patch("app.services.sms_service.Connection", return_value=_make_conn([])):
+         patch("app.services.sms_service.requests.get", _make_get_mock([])):
         from app.services import sms_service
         result = sms_service.lookup_user("ghost")
     assert result is None
 
 
-def test_lookup_user_returns_none_when_no_phone_attrs(app):
-    entry = _make_entry(mobile=None, telephoneNumber=None)
+def test_lookup_user_returns_none_when_phone_missing(app):
+    students = [{"course_username": "alice", "phone_number": None, "full_name": "Alice"}]
     with app.app_context(), \
-         patch("app.services.sms_service.Tls"), \
-         patch("app.services.sms_service.Server"), \
-         patch("app.services.sms_service.Connection", return_value=_make_conn([entry])):
+         patch("app.services.sms_service.requests.get", _make_get_mock(students)):
         from app.services import sms_service
         result = sms_service.lookup_user("alice")
     assert result is None
+
+
+def test_lookup_user_returns_none_when_course_username_mismatch(app):
+    students = [{"course_username": "bob", "phone_number": "+15550001234", "full_name": "Bob"}]
+    with app.app_context(), \
+         patch("app.services.sms_service.requests.get", _make_get_mock(students)):
+        from app.services import sms_service
+        result = sms_service.lookup_user("alice")
+    assert result is None
+
+
+def test_lookup_user_raises_on_http_error(app):
+    resp = MagicMock()
+    resp.raise_for_status.side_effect = req_lib.HTTPError("401 Unauthorized")
+    with app.app_context(), \
+         patch("app.services.sms_service.requests.get", return_value=resp):
+        from app.services import sms_service
+        with pytest.raises(req_lib.HTTPError):
+            sms_service.lookup_user("alice")
 
 
 # ── start_verification ────────────────────────────────────────────────────────
